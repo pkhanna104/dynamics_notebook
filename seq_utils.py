@@ -1,12 +1,10 @@
 import numpy as np 
+
 import scipy
 import scipy.signal 
 from scipy.signal import butter, filtfilt, hilbert, sosfiltfilt
 
 import matplotlib.pyplot as plt
-
-from sklearn.neighbors import KernelDensity
-from sklearn.model_selection import GridSearchCV
 
 def generate_seq(f_fund, std_gauss, frac_offset, total_length=None, N_neurons=None, dt=0.01,
   pad_zeros = 0.0, end_pad = 0., beg_pad = 0.):
