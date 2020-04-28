@@ -74,6 +74,8 @@ def eigenspec(*args, labels=None, dt = 0.01, xlim = None, ylim = None, axi = Non
       ax = axi
       skip_legend = True
 
+    L = []; 
+    D = []; 
     for ia, A in enumerate(args):
 
         ### Make sure square matrix 
@@ -90,15 +92,20 @@ def eigenspec(*args, labels=None, dt = 0.01, xlim = None, ylim = None, axi = Non
         TD = -1/np.log(R)*dt 
 
         ## Get Hz: 
-        Hz = Th / (2*np.pi*dt)
+        Hz = np.array(Th / (2*np.pi*dt))
+
+        ix_mx = np.nonzero(np.round(Hz*1000)/1000.==(0.5/dt))[0]
+        Hz[ix_mx] = 0
 
         if labels is None:
             lab = 'A%d'%(ia+1)
         else:
             lab = labels[ia]
-        ax.vlines(Hz, 0, TD, color=colors[ia])
-        ax.plot(Hz, TD, '.', color=colors[ia], label=lab, markersize=20)
-    
+        lines = ax.vlines(Hz, 0, TD, color=colors[ia])
+        dots = ax.plot(Hz, TD, '.', color=colors[ia], label=lab, markersize=20)
+        L.append(lines)
+        D.append(dots)
+
     if skip_legend:
         pass
     else:
@@ -111,6 +118,8 @@ def eigenspec(*args, labels=None, dt = 0.01, xlim = None, ylim = None, axi = Non
 
     ax.set_ylabel('Time Decay (sec)')
     ax.set_xlabel('Frequency (Hz)')
+
+    return L, D
 
 ###### PLOTTING TOP DIM #####
 def flow_field_plot_top_dim(A, X, dt, dim0 = 0, dim1 = 1, cmax = .1,
