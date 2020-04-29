@@ -261,3 +261,320 @@ class rotator(interactive_viewer_Amat_pls_eigs):
         ax.set_xlabel('Frequency (Hz)')
         ax.set_ylabel ('Time Decay (sec)')
         ax.set_xlim([-20, 20])
+
+
+#### For making fake data ###
+class fake_data_maker(object):
+
+    def __init__(self, *args):
+        
+        self.dt = 0.01; 
+        self.f1 = 1.;
+        self.f2 = 1.; 
+        self.f3 = 1.;
+        self.d1 = 1.; 
+        self.d2 = 1.; 
+        self.d3 = 1.; 
+        self.noise = 0.2; 
+        self.eig_lines = None;
+        self.eig_dots = None;
+        self.ax = None
+
+        ### Make slider for frequency content
+        layout = widgets.Layout(width='200px')
+
+        self.freqs = widgets.interactive(self.save_freq, {'manual': True}, 
+                                     f1 = widgets.IntSlider(min=1, max=20, step=1, layout=layout),
+                                     f2 = widgets.IntSlider(min=1, max=20, step=1, layout=layout),
+                                     f3 = widgets.IntSlider(min=1, max=20, step=1, layout=layout),
+                                     style={'description_width': 'initial'})
+        
+        self.decays = widgets.interactive(self.save_decay, {'manual': True}, 
+                                     d1 = widgets.FloatSlider(min=0.01, max=1., step=.01, layout=layout),
+                                     d2 = widgets.FloatSlider(min=0.01, max=1., step=.01, layout=layout),
+                                     d3 = widgets.FloatSlider(min=0.01, max=1., step=.01, layout=layout),
+                                     style={'description_width': 'initial'})
+        
+        self.noise_wid = widgets.interactive(self.save_noise, {'manual': True},
+            noise = widgets.FloatSlider(.2, min=0.1, max=1., step=.01, layout=layout),
+            style = {'description_width': 'initial'})
+
+        self.ylim_wid = widgets.interactive(self.set_ylim_eig, {'manual': True},
+            ymax = widgets.FloatSlider(1., min=0.1, max=5., step=.01, layout=layout),
+            style = {'description_width': 'initial'})
+
+        self.r2 = widgets.HTMLMath()
+
+        ### Eigenvalue spec plot ####
+        self.out1 = widgets.Output()
+        with self.out1:
+            fig1, axes1 = plt.subplots(figsize=(6, 4))
+            #self.format_ax1(axes1)
+            plt.show(fig1)
+        self.fig1 = fig1 
+        self.axes1 = axes1
+
+        # ### Data ####
+        self.out2 = widgets.Output()
+        with self.out2:
+            fig2, axes2 = plt.subplots(ncols = 3, nrows = 3, figsize=(16, 6))
+            #self.format_ax2(axes2)
+            plt.show(fig2)
+        self.fig2 = fig2 
+        self.axes2 = axes2
+
+        ### First row; 
+        self.grandchild1 = [self.noise_wid, self.ylim_wid, self.r2]
+        self.grand_row = widgets.VBox(self.grandchild1)
+
+        self.children1 = [self.freqs, self.decays, self.grand_row, self.out1]
+
+    def assemble_box(self):
+        row1 = widgets.HBox(self.children1)
+        #self.children2 = [row1, self.out1]
+
+        #col1 = widgets.VBox(self.children2)
+        self.box = widgets.VBox([row1, self.out2])
+
+    def save_freq(self, f1, f2, f3):
+        self.f1, self.f2, self.f3 = (f1, f2, f3)
+        self.generate_data()
+
+    def save_decay(self, d1, d2, d3):
+        self.d1, self.d2, self.d3 = (d1, d2, d3)
+        self.generate_data()
+        
+    def save_noise(self, noise):
+        self.noise = noise; 
+        self.generate_data()
+        
+    def generate_data(self):
+
+        ## Generate fake data; 
+        nT = 1000; ## Number of data points 
+
+        ### Time axis: 
+        self.T = np.arange(0., self.dt*nT, self.dt)
+
+        ## Storage for components used to create data: 
+        X = []; 
+
+        ## Generate a few sine waves:
+        for f in[self.f1, self.f2, self.f3]:
+            s1 = np.sin(2*np.pi*f*self.T)
+            c1 = np.cos(2*np.pi*f*self.T)
+
+            ## Add them to X
+            X.append(s1)
+            X.append(c1)
+
+        ## Generate a few exponential decays: 
+        for r in [self.d1, self.d2, self.d3]:
+            exp_dec = r**self.T
+            X.append(exp_dec)
+
+        ### Now X is full of oscillating and decaying waveforms ###
+        X = np.vstack((X)).T
+        assert(X.shape[0] == nT)
+
+        _, nD = X.shape
+
+        ### Let's add a bit of noise
+        X += self.noise*np.random.randn(nT, nD) 
+
+        ### Now lets randomly mix these waveforms together ##
+        Mixing = np.random.randn(nD, nD)
+        self.Data_mixed = np.dot(Mixing, X.T).T
+
+        ### Make eigenspec; 
+        self.est_A()
+
+        ### Plot eigenspec;
+        self.link_to_eig()
+
+        ### Plot data 
+        self.plot_data()
+
+    def est_A(self):
+        ## Setup X_t, X_{t-1}; 
+        Xt = self.Data_mixed[1:, :] ## All data points except first
+        Xtm1 = self.Data_mixed[:-1, :] ## All data points except last 
+
+        ## Fit an A matrix using least squares linear regressions: 
+        Aest = np.linalg.lstsq(Xtm1, Xt, rcond=None)[0] 
+
+        ### This function solves for A: x_t = x_t-1 A, so we take the transpose
+        Aest = Aest.T
+        self.Aest = Aest; 
+        self.Xtm1 = Xtm1; 
+
+        ### Update the R2 value; 
+        r2 = lds_utils.get_population_R2(Xt, np.dot(Aest, Xtm1.T).T)
+        self.r2.value = r"$ R^2 = %.2f$"%(r2)      
+
+    def plot_data(self):
+        if self.ax is None:
+            pass
+        else:
+            for a in self.ax:
+                for ai in a: 
+                    ai.remove()
+        self.ax = []
+
+        with self.out2:
+            clear_output(wait=True)
+            nT, nD = self.Data_mixed.shape
+
+            for n in range(nD):
+                ax = self.axes2[int(n/3), n%3].plot(self.T, self.Data_mixed[:, n], 'b-',
+                    linewidth = .5)
+                self.ax.append(ax)
+
+                self.axes2[int(n/3), n%3].set_title('Dim %d' %n)
+            self.fig2.tight_layout()
+            display(self.fig2)
+
+    
+    def link_to_eig(self, *args):
+        ymax = 0. 
+
+        with self.out1:
+            ### Clear the axis ### 
+            clear_output(wait=True)
+            
+            ### Remove lines / dots; 
+            if self.eig_lines is not None:
+                for l in self.eig_lines:
+                    l.remove()
+                for d in self.eig_dots:
+                    for di in d:
+                        di.remove()
+
+            ### Plot the eigenspec
+            lines, dots = lds_utils.eigenspec(self.Aest, dt = self.dt, 
+                axi = self.axes1, skip_legend=False)
+            self.format_eig_axes(self.axes1)
+
+            display(self.fig1)
+            
+            self.eig_lines = lines; 
+            self.eig_dots = dots; 
+
+    def format_eig_axes(self, *args):
+        self.axes1.set_xlim([-21, 21])
+        self.axes1.set_xlabel('Frequency (Hz)')
+        self.axes1.set_xlabel('Time Decay (sec)')
+
+    def set_ylim_eig(self, ymax):
+        with self.out1:
+            clear_output(wait=True)
+            self.axes1.set_ylim([-.1, ymax])
+            display(self.fig1)
+        
+class fake_data_flows(fake_data_maker):
+    
+    def __init__(self, *args):
+        super().__init__()
+        
+        layout = widgets.Layout(width='200px')
+        self.flow_arrows = None
+        self.flow_data = None
+        self.cmax0 = 1.
+        self.cmax1 = 1.
+        self.cmax2 = 1.
+
+
+        ### Add some slider for dimension: 
+        self.dims_plt0 = widgets.interactive(self.get_dims0,
+                             dim0 = widgets.IntSlider(0, min=0, max=8, step=1, layout=layout),
+                             dim1 = widgets.IntSlider(1, min=1, max=8, step=1, layout=layout),
+                             cmax0 = widgets.FloatSlider(1., min=0.1, max=2.0, step=.01, layout=layout),
+                             style={'description_width': 'initial'})
+        
+        self.dims_plt1 = widgets.interactive(self.get_dims1, 
+                             dim2 = widgets.IntSlider(2, min=0, max=8, step=1, layout=layout),
+                             dim3 = widgets.IntSlider(3, min=1, max=8, step=1, layout=layout),
+                             cmax1 = widgets.FloatSlider(1., min=0.1, max=2.0, step=.01, layout=layout),
+                             style={'description_width': 'initial'})
+        
+        self.dims_plt2 = widgets.interactive(self.get_dims2, 
+                             dim4 = widgets.IntSlider(4, min=0, max=8, step=1, layout=layout),
+                             dim5 = widgets.IntSlider(5, min=1, max=8, step=1, layout=layout),
+                             cmax2 = widgets.FloatSlider(1., min=0.1, max=2.0, step=.01, layout=layout),
+                             style={'description_width': 'initial'})
+
+        with self.out2:
+            # Clear figs #
+            clear_output(wait=True)
+            fig2, axes2 = plt.subplots(ncols = 3, figsize=(15, 5))
+            plt.show(fig2)
+        self.fig2 = fig2 
+        self.axes2 = axes2
+
+
+    def assemble_box(self):
+        row1 = widgets.HBox(self.children1)
+        
+        self.children2 = [self.dims_plt0, self.dims_plt1, self.dims_plt2]
+        row2 = widgets.HBox(self.children2)
+
+        #col1 = widgets.VBox(self.children2)
+        self.box = widgets.VBox([row1, row2, self.out2])
+
+
+    def get_dims0(self, dim0, dim1, cmax0):
+        self.dim0 = dim0; 
+        self.dim1 = dim1; 
+        self.cmax0 = cmax0; 
+        self.plot_data()
+
+    def get_dims1(self, dim2, dim3, cmax1):
+        self.dim2 = dim2
+        self.dim3 = dim3
+        self.cmax1 = cmax1; 
+        self.plot_data()
+
+    def get_dims2(self, dim4, dim5, cmax2):
+        self.dim4 = dim4; 
+        self.dim5 = dim5; 
+        self.cmax2 = cmax2; 
+        self.plot_data()
+
+    def plot_data(self):
+        ### Instead of eigspec, plot the flow fields; 
+        with self.out2:
+
+            ### Clear the axis ### 
+            clear_output(wait=True)
+            
+            ### Remove lines / dots; 
+            if self.flow_arrows is not None:
+                for l in self.flow_arrows:
+                    l.remove()
+            if self.flow_data is not None:
+                for d in self.flow_data:
+                    for di in d:    
+                        di.remove()
+
+            self.flow_arrows = []
+            self.flow_data = []
+
+            D = [[self.dim0, self.dim1, self.cmax0], 
+                 [self.dim2, self.dim3, self.cmax1], 
+                 [self.dim4, self.dim5, self.cmax2]]
+
+            ### Plot 3 subplots ### 
+            for i_f, Ds in enumerate(D):
+
+                ### Plot Quiver ####
+                Q, D = lds_utils.flow_field_plot_top_dim(self.Aest, self.Xtm1, self.dt, 
+                    dim0=Ds[0], dim1=Ds[1], ax = self.axes2[i_f], cmax = Ds[2])
+                self.flow_arrows.append(Q)
+                self.flow_data.append(D)
+
+            ### Fig 2 ##
+            display(self.fig2)
+
+            
+
+

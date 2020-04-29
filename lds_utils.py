@@ -123,7 +123,7 @@ def eigenspec(*args, labels=None, dt = 0.01, xlim = None, ylim = None, axi = Non
 
 ###### PLOTTING TOP DIM #####
 def flow_field_plot_top_dim(A, X, dt, dim0 = 0, dim1 = 1, cmax = .1,
-    scale = 1.0, width = .04):
+    scale = 1.0, width = .04, ax = None):
     ''' 
     method to plot flow field plus first 100 data points in X after transforming 
     to the eigenvector basis 
@@ -156,17 +156,19 @@ def flow_field_plot_top_dim(A, X, dt, dim0 = 0, dim1 = 1, cmax = .1,
     hz1 = np.angle(evs[dim1])/(2*np.pi*dt)
 
     ### Now plot flow field in top lambda dimensions
-    f, ax = plt.subplots()
+    if ax is None: 
+        f, ax = plt.subplots()
     ax.axis('equal')
-    plot_flow(Za, ax, dim0=dim0, dim1=dim1, xmax=xmax, xmin=xmin, ymax=ymax, 
+    Q = plot_flow(Za, ax, dim0=dim0, dim1=dim1, xmax=xmax, xmin=xmin, ymax=ymax, 
       ymin=ymin, cmax = cmax, scale = scale, width = width)
 
-    ax.plot(Z[:100, dim0], Z[:100, dim1], 'k.-', alpha=.5)
+    D = ax.plot(Z[:100, dim0], Z[:100, dim1], 'k.-', alpha=.5)
     ax.set_xlabel('$z_{%d}$'%dim0, fontsize=14)
     ax.set_ylabel('$z_{%d}$'%dim1, fontsize=14)
     
     title_str = '$\lambda_{%d}$ Time Decay =%.2f sec, Hz = %.2f,\n $\lambda_{%d}$ Time Decay=%.2f sec, Hz = %.2f'%(dim0, td[0], hz0, dim1, td[1], hz1)
     ax.set_title(title_str, fontsize=14)
+    return Q, D
 
 def get_sorted_realized_evs(A):
     '''
@@ -245,6 +247,7 @@ def plot_flow(A, axi, nb_points=20, xmin=-5, xmax=5, ymin=-5, ymax=5, dim0 = 0, 
     Q = axi.quiver(X1, Y1, DX, DY, M, units = 'xy', scale = scale,
         pivot='mid', cmap=plt.cm.viridis, width=width, alpha=alpha,
         clim = [0., cmax])
+    return Q
 
 def compute_dX(X, Y, A, dim0, dim1):
     '''
