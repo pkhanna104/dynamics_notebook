@@ -165,7 +165,8 @@ def flow_field_plot_top_dim(A, X, dt, dim0 = 0, dim1 = 1, cmax = .1,
     D = ax.plot(Z[:100, dim0], Z[:100, dim1], 'k.-', alpha=.5)
     ax.set_xlabel('$z_{%d}$'%dim0, fontsize=14)
     ax.set_ylabel('$z_{%d}$'%dim1, fontsize=14)
-    
+    ax.set_xlim([xmin, xmax])
+    ax.set_ylim([ymin, ymax])
     title_str = '$\lambda_{%d}$ Time Decay =%.2f sec, Hz = %.2f,\n $\lambda_{%d}$ Time Decay=%.2f sec, Hz = %.2f'%(dim0, td[0], hz0, dim1, td[1], hz1)
     ax.set_title(title_str, fontsize=14)
     return Q, D
