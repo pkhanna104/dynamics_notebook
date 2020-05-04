@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import ipywidgets as widgets
 from IPython.display import display,clear_output
 
-import lds_utils
+import lds_utils, seq_utils
 
 class PlotData:
     def __init__(self):
@@ -336,6 +336,8 @@ class fake_data_maker(object):
         #col1 = widgets.VBox(self.children2)
         self.box = widgets.VBox([row1, self.out2])
 
+        self.generate_data()
+
     def save_freq(self, f1, f2, f3):
         self.f1, self.f2, self.f3 = (f1, f2, f3)
         self.generate_data()
@@ -476,7 +478,7 @@ class fake_data_flows(fake_data_maker):
     def __init__(self, *args):
         super().__init__()
         
-        layout = widgets.Layout(width='200px')
+        layout = widgets.Layout(width='350px')
         self.flow_arrows = None
         self.flow_data = None
         self.cmax0 = 1.
@@ -511,7 +513,6 @@ class fake_data_flows(fake_data_maker):
         self.fig2 = fig2 
         self.axes2 = axes2
 
-
     def assemble_box(self):
         row1 = widgets.HBox(self.children1)
         
@@ -520,7 +521,7 @@ class fake_data_flows(fake_data_maker):
 
         #col1 = widgets.VBox(self.children2)
         self.box = widgets.VBox([row1, row2, self.out2])
-
+        self.generate_data()
 
     def get_dims0(self, dim0, dim1, cmax0):
         self.dim0 = dim0; 
@@ -575,6 +576,123 @@ class fake_data_flows(fake_data_maker):
             ### Fig 2 ##
             display(self.fig2)
 
+
+#### For sequence data ####
+class sinuoids(object):
+    def __init__(self):
+        self.dt =0.01; 
+        self.eig_lines = None; 
+        self.eig_dots = None;
+        self.cax = None
+        self.freq = 1; 
+        self.t_offset = .1; 
+        self.N_neurons = 2
+        self.noise = .2
+        self.ylims = 1.
+
+        layout = widgets.Layout(width='200px')
+        ### Add some slider for dimension:
+        self.sine_params = widgets.interactive(self.get_sine_params, {'manual': True},
+                             freq = widgets.IntSlider(1, min=1, max=20, step=1, layout=layout),
+                             t_offset = widgets.FloatSlider(.1, min=0., max=.5, step=.05, layout=layout),
+                             N_neurons = widgets.IntSlider(2, min=2, max=20, layout=layout),
+                             noise = widgets.FloatSlider(.2, min=0.1, max=.5, step=.05, layout=layout),
+                             style={'description_width': 'initial'})
+
+
+
+        ### Get plots; ###
+        self.out1 = widgets.Output()
+        with self.out1:
+            fig1, axes1 = plt.subplots(ncols = 2, figsize=(8, 4))
+            #self.format_ax1(axes1)
+            plt.show(fig1)
+        self.fig1 = fig1 
+        self.axes1 = axes1
+
+        self.ylims_eig = widgets.interactive(self.set_ylim_eigs,
+                     ylim = widgets.FloatSlider(1., min=0.25, max=10, step=.25, layout=layout),
+                     style={'description_width': 'initial'})
+
+    def get_sine_params(self, freq, t_offset, N_neurons, noise):
+        self.freq = freq; 
+        self.t_offset = t_offset; 
+        self.N_neurons = N_neurons
+        self.noise = noise
+        self.gen_sinusoid()
+
+    def assemble_box(self):
+        self.children0 = widgets.HBox([self.sine_params, self.ylims_eig])
+        self.children1 = [self.children0, self.out1]
+        self.box = widgets.VBox(self.children1)
+        self.gen_sinusoid()
+
+    def plot_data(self):
+        with self.out1:
+            clear_output(wait=True)
+            nT, nD = self.data.shape
+            if self.cax is not None:
+                self.cax.remove()
+
+            self.cax = self.axes1[0].pcolormesh(np.arange(nT+1)*self.dt, np.arange(nD+1), 
+                self.data.T, cmap='binary', vmin=-1., vmax=1.)
+            self.axes1[0].set_xlabel('Time (sec)')
+            self.axes1[0].set_ylabel('Neurons')
+            self.axes1[0].set_xlim([0., nT*self.dt])
+
+
+            ### Eig plot ##
+            ### Remove lines / dots; 
+            if self.eig_lines is not None:
+                for l in self.eig_lines:
+                    l.remove()
+                for d in self.eig_dots:
+                    for di in d:
+                        di.remove()
+
+            ### Plot the eigenspec
+            lines, dots = lds_utils.eigenspec(self.Aest, dt = self.dt, 
+                axi = self.axes1[1], skip_legend=False)
+            self.format_eig_axes(self.axes1)
             
+            self.eig_lines = lines; 
+            self.eig_dots = dots; 
 
+            self.fig1.tight_layout()
+            display(self.fig1)
 
+    def gen_sinusoid(self):
+        ### T x N ###
+        self.data = seq_utils.generate_seq(self.freq, -1, self.t_offset, total_length=None, 
+            N_neurons = self.N_neurons, dt=0.01, pad_zeros = 0.0, end_pad = 0., beg_pad = 0.)
+        if self.noise > 0.:
+            self.data += self.noise*np.random.randn(*self.data.shape)
+
+        self.est_A()
+        self.plot_data()
+
+    def est_A(self):
+        ## Setup X_t, X_{t-1}; 
+        Xt = self.data[1:, :] ## All data points except first
+        Xtm1 = self.data[:-1, :] ## All data points except last 
+
+        ## Fit an A matrix using least squares linear regressions: 
+        Aest = np.linalg.lstsq(Xtm1, Xt, rcond=None)[0] 
+
+        ### This function solves for A: x_t = x_t-1 A, so we take the transpose
+        Aest = Aest.T
+        self.Aest = Aest; 
+        self.Xtm1 = Xtm1; 
+    
+    def set_ylim_eigs(self, ylim):
+        self.ylims = ylim; 
+        self.plot_data(); 
+
+    def format_eig_axes(self, *args):
+        self.axes1[1].set_xlim([-21, 21])
+        self.axes1[1].set_ylim([-0.1, self.ylims])
+        self.axes1[1].set_xlabel('Frequency (Hz)')
+        self.axes1[1].set_ylabel('Time Decay (sec)')
+
+class mono_sequ(sinuoids):
+    

@@ -6,7 +6,7 @@ from scipy.signal import butter, filtfilt, hilbert, sosfiltfilt
 
 import matplotlib.pyplot as plt
 
-def generate_seq(f_fund, std_gauss, frac_offset, total_length=None, N_neurons=None, dt=0.01,
+def generate_seq(f_fund, std_gauss, dt_offset, total_length=None, N_neurons=None, dt=0.01,
   pad_zeros = 0.0, end_pad = 0., beg_pad = 0.):
   ''' 
   method to generate a sequence of neural activity composed of individual 
@@ -17,25 +17,11 @@ def generate_seq(f_fund, std_gauss, frac_offset, total_length=None, N_neurons=No
   Input units: 
     f_fund: frequency (Hz)
     std_gauss: standard deviation of gaussian (sec)
-    frac_offset: fraction of f_fund cycle
+    dt_offset: time offset b/w rows; 
     total_lenth: seconds OR
     N_neurons: integer unit
     dt: seconds
   '''
-  ### Get the number of indices in the std_gauss ###
-  std_ind = int(np.ceil(std_gauss/dt))
-
-  ### Make the gaussian envelope ###
-  gaussian_env = scipy.signal.gaussian(2*std_ind, std_ind, sym=True)
-
-  ### Make the sine wave, centered at the middle of the gaussian; 
-  sine_t = np.linspace(-std_gauss, std_gauss, len(gaussian_env))
-  sine = np.cos(2*np.pi*f_fund*sine_t)
-  
-  ### Get unit length ###
-  unitL = len(sine)
-  unitL_half = int(0.5*unitL)
-
   ## N_units
   if total_length is None:
     N_units = N_neurons
@@ -43,24 +29,47 @@ def generate_seq(f_fund, std_gauss, frac_offset, total_length=None, N_neurons=No
     ### Now use this to tile 
     ind_offs = ( frac_offset / f_fund ) / dt # frac cycles to seconds to timesteps 
     N_units = int(np.floor((total_length / dt ) / ind_offs))
-  
-  ### Multiple to get a burst unit: 
-  unit_mod = sine*gaussian_env 
-  ### Total indices length / offsets --> how many offsets do we need?
-  #N_units = int(np.floor((total_length / dt) / ind_offs))
 
   ### Now use this to tile 
-  ind_offs = ( frac_offset / f_fund ) / dt # frac cycles to seconds to timesteps 
+  ind_offs = ( dt_offset ) / dt # frac cycles to seconds to timesteps 
   
-  ### Total length of time; 
-  ind_tot = int(unitL_half + N_units*ind_offs + unitL_half)
+  ### Get the number of indices in the std_gauss ###
+  if std_gauss < 0:
+    ind_tot = int(((1./f_fund)/dt) + (N_units*ind_offs))
+
+  else:
+    std_ind = int(np.ceil(std_gauss/dt))
+    ### Make the gaussian envelope ###
+    gaussian_env = scipy.signal.gaussian(2*std_ind, std_ind, sym=True)
+
+    ### Make the sine wave, centered at the middle of the gaussian; 
+    sine_t = np.linspace(-std_gauss, std_gauss, len(gaussian_env))
+  
+    ### Get sine wave ###
+    sine = np.cos(2*np.pi*f_fund*sine_t)
+    
+    ### Get unit length ###
+    unitL = len(sine)
+    unitL_half = int(0.5*unitL)
+
+    ### Multiple to get a burst unit: 
+    unit_mod = sine*gaussian_env 
+
+    ### Total length of time; 
+    ind_tot = int(unitL_half + N_units*ind_offs + unitL_half)
 
   ### Initialize the data: 
   Data = np.zeros((ind_tot, N_units))
+  T_tot = ind_tot*dt
 
   for i_n in range(N_units):
-    ix_start = int(unitL_half + i_n*ind_offs)
-    Data[ix_start - unitL_half:ix_start + unitL_half, i_n] = unit_mod.copy()
+    if std_gauss < 0:
+      ts_ = np.linspace(i_n*dt_offset, T_tot + i_n*dt_offset, ind_tot)
+      Data[:, i_n] = np.sin(2*np.pi*f_fund*ts_)
+    
+    else:
+      ix_start = int(unitL_half + i_n*ind_offs)
+      Data[ix_start - unitL_half:ix_start + unitL_half, i_n] = unit_mod.copy()
   
   if pad_zeros > 0:
     pz = int(pad_zeros/dt)
