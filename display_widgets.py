@@ -489,19 +489,19 @@ class fake_data_flows(fake_data_maker):
         ### Add some slider for dimension: 
         self.dims_plt0 = widgets.interactive(self.get_dims0,
                              dim0 = widgets.IntSlider(0, min=0, max=8, step=1, layout=layout),
-                             dim1 = widgets.IntSlider(1, min=1, max=8, step=1, layout=layout),
+                             dim1 = widgets.IntSlider(1, min=0, max=8, step=1, layout=layout),
                              cmax0 = widgets.FloatSlider(1., min=0.1, max=2.0, step=.01, layout=layout),
                              style={'description_width': 'initial'})
         
         self.dims_plt1 = widgets.interactive(self.get_dims1, 
                              dim2 = widgets.IntSlider(2, min=0, max=8, step=1, layout=layout),
-                             dim3 = widgets.IntSlider(3, min=1, max=8, step=1, layout=layout),
+                             dim3 = widgets.IntSlider(3, min=0, max=8, step=1, layout=layout),
                              cmax1 = widgets.FloatSlider(1., min=0.1, max=2.0, step=.01, layout=layout),
                              style={'description_width': 'initial'})
         
         self.dims_plt2 = widgets.interactive(self.get_dims2, 
                              dim4 = widgets.IntSlider(4, min=0, max=8, step=1, layout=layout),
-                             dim5 = widgets.IntSlider(5, min=1, max=8, step=1, layout=layout),
+                             dim5 = widgets.IntSlider(5, min=0, max=8, step=1, layout=layout),
                              cmax2 = widgets.FloatSlider(1., min=0.1, max=2.0, step=.01, layout=layout),
                              style={'description_width': 'initial'})
 
@@ -579,32 +579,50 @@ class fake_data_flows(fake_data_maker):
 
 #### For sequence data ####
 class sinuoids(object):
-    def __init__(self):
+    def __init__(self, defaults = None, fig1 = None, axes1 = None, skip_sine_params = False):
+        self.xlims = [-20, 20]
         self.dt =0.01; 
         self.eig_lines = None; 
         self.eig_dots = None;
         self.cax = None
-        self.freq = 1; 
-        self.t_offset = .1; 
-        self.N_neurons = 2
-        self.noise = .2
-        self.ylims = 1.
+        
+        if defaults is None:
+            self.freq = 1; 
+            self.t_offset = .1; 
+            self.N_neurons = 2
+            n_max = 20
+            n_min = 2
+            self.noise = .2
+            self.ylims = 1.
+            self.eig_plot = 1
 
-        layout = widgets.Layout(width='200px')
-        ### Add some slider for dimension:
-        self.sine_params = widgets.interactive(self.get_sine_params, {'manual': True},
-                             freq = widgets.IntSlider(1, min=1, max=20, step=1, layout=layout),
-                             t_offset = widgets.FloatSlider(.1, min=0., max=.5, step=.05, layout=layout),
-                             N_neurons = widgets.IntSlider(2, min=2, max=20, layout=layout),
-                             noise = widgets.FloatSlider(.2, min=0.1, max=.5, step=.05, layout=layout),
+        else:
+            self.freq = defaults['freq']
+            self.t_offset = defaults['t_offset']
+            self.N_neurons = defaults['N_neurons']
+            n_max = defaults['N_neurons', 'max']
+            n_min = defaults['N_neurons', 'min']
+            self.noise = defaults['noise']
+            self.ylims = defaults['ylims']
+            self.eig_plot = defaults['eig_plot']
+
+        layout = widgets.Layout(width='400px')
+        if skip_sine_params:
+            pass
+        else:
+            ### Add some slider for dimension:
+            self.sine_params = widgets.interactive(self.get_sine_params, {'manual': True},
+                             freq = widgets.IntSlider(self.freq, min=1, max=10, step=1, layout=layout),
+                             t_offset = widgets.FloatSlider(self.t_offset, min=0., max=.3, step=.005, layout=layout),
+                             N_neurons = widgets.IntSlider(self.N_neurons, min=n_min, max=n_max, layout=layout),
+                             noise = widgets.FloatSlider(self.noise, min=0.0, max=.5, step=.05, layout=layout),
                              style={'description_width': 'initial'})
-
-
 
         ### Get plots; ###
         self.out1 = widgets.Output()
         with self.out1:
-            fig1, axes1 = plt.subplots(ncols = 2, figsize=(8, 4))
+            if fig1 is None and axes1 is None:
+                fig1, axes1 = plt.subplots(ncols = 2, figsize=(8, 4))
             #self.format_ax1(axes1)
             plt.show(fig1)
         self.fig1 = fig1 
@@ -612,11 +630,18 @@ class sinuoids(object):
 
         self.ylims_eig = widgets.interactive(self.set_ylim_eigs,
                      ylim = widgets.FloatSlider(1., min=0.25, max=10, step=.25, layout=layout),
+                     xmin = widgets.FloatSlider(-21., min=-21, max=21, step=.25, layout=layout),
+                     xmax = widgets.FloatSlider(21.,  min=-21, max=21, step=.25, layout=layout),
                      style={'description_width': 'initial'})
 
     def get_sine_params(self, freq, t_offset, N_neurons, noise):
         self.freq = freq; 
-        self.t_offset = t_offset; 
+        self.t_off_max = 0.5*(1/self.freq)
+
+        tmp = self.sine_params.kwargs_widgets
+        tmp[1].max = self.t_off_max
+
+        self.t_offset = np.min([self.t_off_max, t_offset]); 
         self.N_neurons = N_neurons
         self.noise = noise
         self.gen_sinusoid()
@@ -639,7 +664,10 @@ class sinuoids(object):
             self.axes1[0].set_xlabel('Time (sec)')
             self.axes1[0].set_ylabel('Neurons')
             self.axes1[0].set_xlim([0., nT*self.dt])
+            self.axes1[0].set_ylim([0., nD])
 
+            ### Function for future plotting to take hold: 
+            self.more_plotting()
 
             ### Eig plot ##
             ### Remove lines / dots; 
@@ -652,7 +680,7 @@ class sinuoids(object):
 
             ### Plot the eigenspec
             lines, dots = lds_utils.eigenspec(self.Aest, dt = self.dt, 
-                axi = self.axes1[1], skip_legend=False)
+                axi = self.axes1[self.eig_plot], skip_legend=False)
             self.format_eig_axes(self.axes1)
             
             self.eig_lines = lines; 
@@ -660,6 +688,9 @@ class sinuoids(object):
 
             self.fig1.tight_layout()
             display(self.fig1)
+    
+    def more_plotting(self):
+        pass
 
     def gen_sinusoid(self):
         ### T x N ###
@@ -683,16 +714,210 @@ class sinuoids(object):
         Aest = Aest.T
         self.Aest = Aest; 
         self.Xtm1 = Xtm1; 
+        self.r2 = lds_utils.get_population_R2(Xt, np.dot(Aest, Xtm1.T).T)
     
-    def set_ylim_eigs(self, ylim):
+    def set_ylim_eigs(self, ylim, xmin, xmax):
         self.ylims = ylim; 
+        self.xlims = [xmin, xmax]
         self.plot_data(); 
 
     def format_eig_axes(self, *args):
-        self.axes1[1].set_xlim([-21, 21])
-        self.axes1[1].set_ylim([-0.1, self.ylims])
-        self.axes1[1].set_xlabel('Frequency (Hz)')
-        self.axes1[1].set_ylabel('Time Decay (sec)')
+        self.axes1[self.eig_plot].set_xlim(self.xlims)
+        self.axes1[self.eig_plot].set_ylim([-0.1, self.ylims])
+        self.axes1[self.eig_plot].set_xlabel('Frequency (Hz)')
+        self.axes1[self.eig_plot].set_ylabel('Time Decay (sec)')
 
-class mono_sequ(sinuoids):
-    
+class mono_sequ2(sinuoids):
+    def __init__(self, *args, **kwargs):
+        self.scatter = None
+        self.vlines = None
+        self.frac_sine_cycle = 0.5
+        
+        defaults = dict()
+        defaults['freq'] = 2
+        defaults['t_offset'] = 0.05; 
+        defaults['N_neurons'] = 2; 
+        defaults['N_neurons', 'max'] = 2; 
+        defaults['N_neurons', 'min'] = 2; 
+        defaults['noise'] = 0.
+        defaults['ylims'] = 0.5
+        defaults['eig_plot'] = 2
+        fig1, axes1 = plt.subplots(ncols = 3, figsize=(12, 4))
+
+        super().__init__(defaults, fig1, axes1, *args, **kwargs)
+        
+
+    def gen_sinusoid(self):
+        ### T x N ###
+        cycle75perc = self.frac_sine_cycle*(1/self.freq)
+        self.data = seq_utils.generate_seq(self.freq, cycle75perc, self.t_offset, total_length=None, 
+            N_neurons = self.N_neurons, dt=0.01, pad_zeros = 0.0, end_pad = 0., beg_pad = 0.)
+        if self.noise > 0.:
+            self.data += self.noise*np.random.randn(*self.data.shape)
+        self.est_A()
+        self.plot_data()
+
+    def more_plotting(self):
+        ax = self.axes1[1]
+        
+        ### Color is time steps
+        if self.scatter is not None:
+            for c in self.scatter:
+                c.remove()
+                
+        cax = ax.scatter(self.data[:, 0], self.data[:, 1], s=None, 
+            c=np.arange(self.data.shape[0]))
+        cbar = self.fig1.colorbar(cax, ax = ax)
+        cbar.set_label('Time Steps', rotation=270)
+        ax.set_xlabel('Neuron 0')
+        ax.set_ylabel('Neuron 1')
+        self.scatter = [cbar, cax]; 
+
+        ev, _ = np.linalg.eig(self.Aest)
+        ang = np.angle(ev)/(2*np.pi*self.dt)
+
+        self.axes1[self.eig_plot].set_title('Freq = %.2f Hz \n $R^2$ of $A_{est} = $ %.2f'%(ang[0], self.r2))
+
+class ploy_sequ2(mono_sequ2):
+    def __init__(self):
+        super().__init__()
+        self.frac_sine_cycle = 2.0
+
+class flex_sequ(mono_sequ2):
+    def __init__(self):
+        super().__init__(skip_sine_params = True)
+        self.frac_sine_cycle = 0.5
+
+        layout = widgets.Layout(width='400px')
+        ### Add some slider for dimension:
+        n_min = 2; n_max = 20; 
+        self.sine_params = widgets.interactive(self.get_sine_params, {'manual': True},
+                             freq = widgets.IntSlider(self.freq, min=1, max=20, step=1, layout=layout),
+                             t_offset = widgets.FloatSlider(self.t_offset, min=0., max=.3, step=.005, layout=layout),
+                             N_neurons = widgets.IntSlider(self.N_neurons, min=n_min, max=n_max, layout=layout),
+                             noise = widgets.FloatSlider(self.noise, min=0.0, max=.5, step=.05, layout=layout),
+                             frac_sine_cycle = widgets.FloatSlider(self.frac_sine_cycle, min=0.1, max=3, step=.05, layout=layout),
+                             style={'description_width': 'initial'})
+
+    def get_sine_params(self, freq, t_offset, N_neurons, noise, frac_sine_cycle):
+        self.freq = freq; 
+        self.t_off_max = 0.5*(1/self.freq)
+
+        tmp = self.sine_params.kwargs_widgets
+        tmp[1].max = self.t_off_max
+
+        self.frac_sine_cycle = frac_sine_cycle
+        self.t_offset = np.min([self.t_off_max, t_offset]); 
+        self.N_neurons = N_neurons
+        self.noise = noise
+        self.gen_sinusoid()
+
+class flex_sequ_pls_flow(flex_sequ):
+    def __init__(self):
+        super().__init__()
+
+        self.out2 = widgets.Output()
+        with self.out2:
+            fig2, axes2 = plt.subplots(ncols = 3, figsize=(15, 5))
+            #self.format_ax1(axes1)
+            plt.show(fig2)
+        self.fig2 = fig2 
+        self.axes2 = axes2
+
+        layout = widgets.Layout(width='350px')
+        self.flow_arrows = None
+        self.flow_data = None
+        self.cmax0 = 1.
+        self.cmax1 = 1.
+        self.cmax2 = 1.
+
+        ### Add some slider for dimension: 
+        self.dims_plt0 = widgets.interactive(self.get_dims0,
+                             dim0 = widgets.IntSlider(0, min=0, max=8, step=1, layout=layout),
+                             dim1 = widgets.IntSlider(1, min=1, max=8, step=1, layout=layout),
+                             cmax0 = widgets.FloatSlider(1., min=0.1, max=2.0, step=.01, layout=layout),
+                             style={'description_width': 'initial'})
+        
+        self.dims_plt1 = widgets.interactive(self.get_dims1, 
+                             dim2 = widgets.IntSlider(2, min=0, max=8, step=1, layout=layout),
+                             dim3 = widgets.IntSlider(3, min=1, max=8, step=1, layout=layout),
+                             cmax1 = widgets.FloatSlider(1., min=0.1, max=2.0, step=.01, layout=layout),
+                             style={'description_width': 'initial'})
+        
+        self.dims_plt2 = widgets.interactive(self.get_dims2, 
+                             dim4 = widgets.IntSlider(4, min=0, max=8, step=1, layout=layout),
+                             dim5 = widgets.IntSlider(5, min=1, max=8, step=1, layout=layout),
+                             cmax2 = widgets.FloatSlider(1., min=0.1, max=2.0, step=.01, layout=layout),
+                             style={'description_width': 'initial'})
+    def assemble_box(self):
+        self.children0 = widgets.HBox([self.sine_params, self.ylims_eig])
+        dims = widgets.HBox([self.dims_plt0, self.dims_plt1, self.dims_plt2])
+        self.children1 = [self.children0, self.out1, dims, self.out2]
+        self.box = widgets.VBox(self.children1)
+        self.gen_sinusoid()
+
+    def get_dims0(self, dim0, dim1, cmax0):
+        self.dim0 = dim0; 
+        self.dim1 = dim1; 
+        self.cmax0 = cmax0; 
+        self.plot_data()
+
+    def get_dims1(self, dim2, dim3, cmax1):
+        self.dim2 = dim2
+        self.dim3 = dim3
+        self.cmax1 = cmax1; 
+        self.plot_data()
+
+    def get_dims2(self, dim4, dim5, cmax2):
+        self.dim4 = dim4; 
+        self.dim5 = dim5; 
+        self.cmax2 = cmax2; 
+        self.plot_data()
+
+    def more_plotting(self):
+        super().more_plotting()
+
+        ### Plot the flow ###
+        ### Instead of eigspec, plot the flow fields; 
+        with self.out2:
+
+            ### Clear the axis ### 
+            clear_output(wait=True)
+            
+            ### Remove lines / dots; 
+            if self.flow_arrows is not None:
+                for l in self.flow_arrows:
+                    l.remove()
+            if self.flow_data is not None:
+                for d in self.flow_data:
+                    for di in d:   
+                        if type(di) is list:
+                            for dii in di:
+                                dii.remove()
+                        else:   
+                            di.remove()
+
+            self.flow_arrows = []
+            self.flow_data = []
+
+            D = [[self.dim0, self.dim1, self.cmax0], 
+                 [self.dim2, self.dim3, self.cmax1], 
+                 [self.dim4, self.dim5, self.cmax2]]
+
+            ### Plot 3 subplots ### 
+            for i_f, Ds in enumerate(D):
+
+                ### Plot Quiver ####
+                _, nD = self.Xtm1.shape
+
+                if Ds[0] >= nD or Ds[1] >= nD: 
+                    pass
+                else:
+                    Q, D = lds_utils.flow_field_plot_top_dim(self.Aest, self.Xtm1, self.dt, 
+                        dim0=Ds[0], dim1=Ds[1], ax = self.axes2[i_f], cmax = Ds[2])
+                    self.flow_arrows.append(Q)
+                    self.flow_data.append(D)
+
+            ### Fig 2 ##
+            display(self.fig2)
+
