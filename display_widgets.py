@@ -48,6 +48,7 @@ class PlotData:
             for di in d:
                 di.remove()
         self.dots = []
+        self.x0 = None
     
     def clear_cax(self):
         for c in self.cax:
@@ -233,6 +234,8 @@ class interactive_viewer_Amat_pls_eigs(interative_viewer_Amatrix_plot):
     def format_eig_axes(self, ax):
         ax.set_xlabel('Frequency (Hz)')
         ax.set_ylabel ('Time Decay (sec)')
+        ax.hlines(0, -10, 10, 'k', linestyle='dashed')
+        ax.vlines(0, -.2, .2, 'k', linestyle='dashed')
         ax.set_xlim([-10, 10])
         ax.set_ylim([-.2, .2])
 
@@ -261,7 +264,8 @@ class rotator(interactive_viewer_Amat_pls_eigs):
         ax.set_xlabel('Frequency (Hz)')
         ax.set_ylabel ('Time Decay (sec)')
         ax.set_xlim([-20, 20])
-
+        ax.hlines(0, -20, 20, 'k', linestyle='dashed')
+        ax.vlines(0, -0.1, 1., 'k', linestyle='dashed')
 
 #### For making fake data ###
 class fake_data_maker(object):
@@ -272,8 +276,8 @@ class fake_data_maker(object):
         self.f1 = 1.;
         self.f2 = 1.; 
         self.f3 = 1.;
-        self.d1 = 1.; 
-        self.d2 = 1.; 
+        self.d1 = .1; 
+        self.d2 = .5; 
         self.d3 = 1.; 
         self.noise = 0.2; 
         self.eig_lines = None;
@@ -281,7 +285,7 @@ class fake_data_maker(object):
         self.ax = None
 
         ### Make slider for frequency content
-        layout = widgets.Layout(width='200px')
+        layout = widgets.Layout(width='300px')
 
         self.freqs = widgets.interactive(self.save_freq, {'manual': True}, 
                                      f1 = widgets.IntSlider(min=1, max=20, step=1, layout=layout),
@@ -289,17 +293,17 @@ class fake_data_maker(object):
                                      f3 = widgets.IntSlider(min=1, max=20, step=1, layout=layout),
                                      style={'description_width': 'initial'})
         
-        self.decays = widgets.interactive(self.save_decay, {'manual': True}, 
-                                     d1 = widgets.FloatSlider(min=0.01, max=1., step=.01, layout=layout),
-                                     d2 = widgets.FloatSlider(min=0.01, max=1., step=.01, layout=layout),
-                                     d3 = widgets.FloatSlider(min=0.01, max=1., step=.01, layout=layout),
-                                     style={'description_width': 'initial'})
+        # self.decays = widgets.interactive(self.save_decay, {'manual': True}, 
+        #                              d1 = widgets.FloatSlider(min=0.01, max=1., step=.01, layout=layout),
+        #                              d2 = widgets.FloatSlider(min=0.01, max=1., step=.01, layout=layout),
+        #                              d3 = widgets.FloatSlider(min=0.01, max=1., step=.01, layout=layout),
+        #                              style={'description_width': 'initial'})
         
         self.noise_wid = widgets.interactive(self.save_noise, {'manual': True},
             noise = widgets.FloatSlider(.2, min=0.1, max=1., step=.01, layout=layout),
             style = {'description_width': 'initial'})
 
-        self.ylim_wid = widgets.interactive(self.set_ylim_eig, {'manual': True},
+        self.ylim_wid = widgets.interactive(self.set_ylim_eig,
             ymax = widgets.FloatSlider(1., min=0.1, max=5., step=.01, layout=layout),
             style = {'description_width': 'initial'})
 
@@ -327,7 +331,7 @@ class fake_data_maker(object):
         self.grandchild1 = [self.noise_wid, self.ylim_wid, self.r2]
         self.grand_row = widgets.VBox(self.grandchild1)
 
-        self.children1 = [self.freqs, self.decays, self.grand_row, self.out1]
+        self.children1 = [self.freqs, self.grand_row, self.out1]
 
     def assemble_box(self):
         row1 = widgets.HBox(self.children1)
@@ -464,6 +468,8 @@ class fake_data_maker(object):
 
     def format_eig_axes(self, *args):
         self.axes1.set_xlim([-21, 21])
+        self.axes1.hlines(0, -21, 21, 'k', linestyle='dashed')
+        self.axes1.vlines(0, -21, 21, 'k', linestyle='dashed')
         self.axes1.set_xlabel('Frequency (Hz)')
         self.axes1.set_xlabel('Time Decay (sec)')
 
@@ -551,11 +557,23 @@ class fake_data_flows(fake_data_maker):
             ### Remove lines / dots; 
             if self.flow_arrows is not None:
                 for l in self.flow_arrows:
-                    l.remove()
+                    if type(l) is list:
+                        for li in l:
+                            li.remove()
+                    else:
+                        l.remove()
+
             if self.flow_data is not None:
                 for d in self.flow_data:
-                    for di in d:    
-                        di.remove()
+                    if type(d) is list:
+                        for di in d:   
+                            if type(di) is list:
+                                for dii in di:
+                                    dii.remove()
+                            else:
+                                di.remove()
+                    else:
+                        d.remove()
 
             self.flow_arrows = []
             self.flow_data = []
@@ -722,10 +740,13 @@ class sinuoids(object):
         self.plot_data(); 
 
     def format_eig_axes(self, *args):
+        self.axes1[self.eig_plot].hlines(0, -100, 100, 'k', linestyle='dashed')
+        self.axes1[self.eig_plot].vlines(0, -100, 100, 'k', linestyle='dashed')
         self.axes1[self.eig_plot].set_xlim(self.xlims)
         self.axes1[self.eig_plot].set_ylim([-0.1, self.ylims])
         self.axes1[self.eig_plot].set_xlabel('Frequency (Hz)')
         self.axes1[self.eig_plot].set_ylabel('Time Decay (sec)')
+
 
 class mono_sequ2(sinuoids):
     def __init__(self, *args, **kwargs):
