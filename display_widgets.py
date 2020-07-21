@@ -471,7 +471,7 @@ class fake_data_maker(object):
         self.axes1.hlines(0, -21, 21, 'k', linestyle='dashed')
         self.axes1.vlines(0, -21, 21, 'k', linestyle='dashed')
         self.axes1.set_xlabel('Frequency (Hz)')
-        self.axes1.set_xlabel('Time Decay (sec)')
+        self.axes1.set_ylabel('Time Decay (sec)')
 
     def set_ylim_eig(self, ymax):
         with self.out1:
