@@ -61,7 +61,14 @@ def eigenspec(*args, labels=None, dt = 0.01, xlim = None, ylim = None, axi = Non
     '''
 
     if labels is not None:
-        assert(len(labels) == len(args))
+        try:
+            assert(len(labels) == len(args))
+        except:
+            print('Labels must be same length as args')
+            print(len(labels))
+            print(labels)
+            print(len(args))
+            print(args)
     
     ### Setup distinct colors for each A matrix
     N = len(args)
@@ -170,6 +177,7 @@ def flow_field_plot_top_dim(A, X, dt, dim0 = 0, dim1 = 1, cmax = .1,
     ax.set_ylim([ymin, ymax])
     title_str = '$\lambda_{%d}$ Time Decay =%.2f sec, Hz = %.2f,\n $\lambda_{%d}$ Time Decay=%.2f sec, Hz = %.2f'%(dim0, td[0], hz0, dim1, td[1], hz1)
     ax.set_title(title_str, fontsize=14)
+    #f.savefig('decay_flow.svg')
     return Q, [D, D1]
 
 def get_sorted_realized_evs(A):
@@ -247,7 +255,7 @@ def plot_flow(A, axi, nb_points=20, xmin=-5, xmax=5, ymin=-5, ymax=5, dim0 = 0, 
 
     ### Use quiver plot -- NOTE: axes must be "equal" to see arrows properly. 
     Q = axi.quiver(X1, Y1, DX, DY, M, units = 'xy', scale = scale,
-        pivot='mid', cmap=plt.cm.viridis, width=width, alpha=alpha,
+        pivot='mid', width=width, alpha=alpha,cmap=plt.cm.copper, #cmap=plt.cm.viridis,
         clim = [0., cmax])
     return Q
 
