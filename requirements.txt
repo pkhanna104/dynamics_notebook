@@ -1,5 +1,4 @@
 setuptools==58.0.*
-distutils==3.6.15
 numpy==1.18.*
 matplotlib==3.2.*
 scipy==1.4.*
